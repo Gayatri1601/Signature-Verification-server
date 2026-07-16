@@ -1,0 +1,30 @@
+# Executables
+server
+client
+
+# Object files
+*.o
+
+# Static and shared libraries
+*.a
+*.so
+
+# Build directories
+build/
+bin/
+
+# CMake (if you use it later)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Editor settings
+.vscode/
+
+# Vim swap files
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
