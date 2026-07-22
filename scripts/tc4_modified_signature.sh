@@ -1,0 +1,4 @@
+jyfP1EjPNhzaT+xzK70lIxR5IEZomFTrM4XxZwHY4k0lr+L0WP0WUH7K5btUz/WEYlecRwZR0QrnxLXoDEeaa5xTPaayZYWlWdROE+lJxULEgNiAWauN5sVqhURLrZrnRWsz2viDHWPov08oNP4trFuWnCzwOjctKP390S5kXQfMveFtlTXOedKiflrkVElxNtcQdEvBiGow19hVhmmXI+rHaqP9he0SvqHwCOAz3+6kVflbBMq1au1/2cF5waD0i2AR7xYTaIgn+LtBeZpNMHRyZBTGfT77ush2cYGAHxLe27dJPJoPz4DVDR82QQa492XJOITNAlhcPFRNC9ifQ==
+#!/bin/bash
+
+echo "Hello from the secure server!"
