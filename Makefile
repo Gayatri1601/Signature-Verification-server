@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -Wall -Wextra -std=c11 -Iinclude
+CFLAGS = -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -Iinclude
 
 LDLIBS = -lssl -lcrypto
 
@@ -13,8 +13,6 @@ SERVER_SRCS = \
         src/main.c \
         src/ipc.c \
         src/crypto.c \
-        src/executor.c \
-        src/utils.c
 
 CLIENT_SRCS = \
         client/client.c \

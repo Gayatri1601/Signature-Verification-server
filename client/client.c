@@ -4,6 +4,9 @@
 
 #include "ipc.h"
 
+#define MAX_OUTPUT_SIZE 8192
+#define MAX_RESPONSE_SIZE (MAX_OUTPUT_SIZE + 512)
+
 int main(int argc, char *argv[])
 {
     int client_fd;
@@ -71,7 +74,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    printf("Signed script sent successfully.\n");
+    char response[MAX_RESPONSE_SIZE];
+    if (receive_message(client_fd, response, sizeof(response)) > 0) {
+    printf("\n===== Server Response =====\n");
+    printf("%s\n", response);
+}
 
     free(buffer);
 

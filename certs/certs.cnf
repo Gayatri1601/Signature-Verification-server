@@ -1,0 +1,19 @@
+[ req ]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_codesign
+prompt = no
+
+[ req_distinguished_name ]
+C = IN
+ST = Karnataka
+L = Bangalore
+O = Canonical
+OU = PKI
+CN = Developer1
+emailAddress = developer1@email.com
+
+[ v3_codesign ]
+basicConstraints = critical,CA:TRUE
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+extendedKeyUsage = codeSigning

@@ -5,14 +5,49 @@
 #include <limits.h>
 #include <openssl/evp.h>
 #include "crypto.h"
+#include <openssl/x509v3.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
+int check_code_signing_extension(X509 *cert)
+{
+    EXTENDED_KEY_USAGE *eku;
+    int i;
+
+    eku = X509_get_ext_d2i(cert,
+                           NID_ext_key_usage,
+                           NULL,
+                           NULL);
+
+    if (eku == NULL)
+    {
+        printf("[ERROR] Certificate does not contain an Extended Key Usage extension.\n");
+        return 0;
+    }
+
+    for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++)
+    {
+        ASN1_OBJECT *obj = sk_ASN1_OBJECT_value(eku, i);
+
+        if (OBJ_obj2nid(obj) == NID_code_sign)
+        {
+            printf("[INFO] Code Signing EKU found.\n");
+
+            EXTENDED_KEY_USAGE_free(eku);
+            return 1;
+        }
+    }
+
+    printf("[ERROR] Certificate is not intended for Code Signing.\n");
+
+    EXTENDED_KEY_USAGE_free(eku);
+    return 0;
+}
+
 int extract_signed_data(char *buffer, char **signature, char **script)
 {
-    printf("[INFO] Extracting signature and script from received data...\n");
 
     if (buffer == NULL) {
         printf("[ERROR] Input buffer is NULL.\n");
@@ -31,11 +66,23 @@ int extract_signed_data(char *buffer, char **signature, char **script)
     *signature = buffer;
     *script = newline + 1;
 
-    printf("[INFO] Signature extracted successfully.\n");
-    printf("[INFO] Script extracted successfully.\n");
+    /* First line must not be the bash shebang */
+    if (strncmp(*signature, "#!", 2) == 0) {
+        printf("[ERROR] Missing Base64 signature in the first line.\n");
+        return -1;
+    }
+
+    /* Empty signature */
+    if (strlen(*signature) == 0) {
+        printf("[ERROR] Empty signature.\n");
+        return -1;
+    }
+
+    printf("[INFO] Signature and script extracted successfully.\n");
 
     return 0;
 }
+
 
 X509 *load_x509_certificate(const char *cert_path)
 {
@@ -57,8 +104,6 @@ X509 *load_x509_certificate(const char *cert_path)
         return NULL;
     }
 
-    printf("[INFO] Certificate loaded successfully.\n");
-
     return cert;
 }
 
@@ -77,8 +122,6 @@ EVP_PKEY *extract_public_key(X509 *cert)
         printf("[ERROR] Failed to extract public key.\n");
         return NULL;
     }
-
-    printf("[INFO] Public key extracted successfully.\n");
 
     return public_key;
 }
@@ -109,8 +152,8 @@ unsigned char *decode_signature(const char *signature_b64, size_t *signature_len
         encoded_len);
 
     if (decoded_len < 0) {
-        printf("[ERROR] Failed to decode Base64 signature.\n");
-        free(decoded);
+        printf("[ERROR] Invalid Base64 encoded signature.\n");
+	free(decoded);
         return NULL;
     }
 
@@ -125,8 +168,6 @@ unsigned char *decode_signature(const char *signature_b64, size_t *signature_len
     }
 
     *signature_len = decoded_len;
-
-    printf("[INFO] Signature decoded successfully.\n");
 
     return decoded;
 }
@@ -152,8 +193,6 @@ int verify_signature(EVP_PKEY *public_key,
         printf("[ERROR] Failed to create digest context.\n");
         return 0;
     }
-
-    printf("[INFO] Initializing SHA-256 verification...\n");
 
     if (EVP_DigestVerifyInit(ctx,
                              NULL,
@@ -196,18 +235,20 @@ int verify_signature(EVP_PKEY *public_key,
     return (result == 1);
 }
 
-int verify_signed_script(const char *certificate_directory, const char *signature_b64, const char *script)
+VerifyStatus verify_signed_script(const char *certificate_directory, const char *signature_b64, const char *script, char *matched_certificate, size_t matched_certificate_size)
 {
     printf("\n========== Starting Signature Verification ==========\n");
-
+    int eku_failure = 0;
+    int codesigning_cert_found = 0;
     unsigned char *decoded_signature = NULL;
     size_t signature_len = 0;
 
     /* Decode the signature only once */
     decoded_signature = decode_signature(signature_b64, &signature_len);
+
     if (decoded_signature == NULL) {
-        printf("[ERROR] Failed to decode Base64 signature.\n");
-        return 0;
+	    printf("[ERROR] Failed to decode Base64 signature.\n");
+	    return VERIFY_INVALID_BASE64;
     }
 
     DIR *dir = opendir(certificate_directory);
@@ -215,7 +256,7 @@ int verify_signed_script(const char *certificate_directory, const char *signatur
         printf("[ERROR] Failed to open certificate directory: %s\n", certificate_directory);
 
         free(decoded_signature);
-        return 0;
+        return VERIFY_CERT_LOAD_FAILED;
     }
 
     printf("[INFO] Searching trusted certificates...\n");
@@ -237,9 +278,7 @@ int verify_signed_script(const char *certificate_directory, const char *signatur
 
         snprintf(cert_path, sizeof(cert_path), "%s/%s", certificate_directory, entry->d_name);
 
-        printf("\n----------------------------------------\n");
-        printf("[INFO] Checking certificate: %s\n", entry->d_name);
-        printf("----------------------------------------\n");
+        printf("[INFO] Trying certificate: %s\n", entry->d_name);
 
         X509 *cert = load_x509_certificate(cert_path);
 
@@ -248,6 +287,13 @@ int verify_signed_script(const char *certificate_directory, const char *signatur
                    entry->d_name);
             continue;
         }
+
+	if (!check_code_signing_extension(cert)) {
+		eku_failure = 1;
+		X509_free(cert);
+		continue;
+	}
+	codesigning_cert_found = 1;
 
         EVP_PKEY *public_key = extract_public_key(cert);
 
@@ -266,13 +312,13 @@ int verify_signed_script(const char *certificate_directory, const char *signatur
 
         if (verified) {
             printf("[SUCCESS] Signature verified using %s\n", entry->d_name);
-
+            snprintf(matched_certificate, matched_certificate_size, "%s", entry->d_name);
             free(decoded_signature);
             closedir(dir);
 
             printf("========== Signature Verification Finished ==========\n\n");
 
-            return 1;
+            return VERIFY_SUCCESS;
         }
 
         printf("[INFO] Signature did not match %s\n",
@@ -283,7 +329,13 @@ int verify_signed_script(const char *certificate_directory, const char *signatur
     free(decoded_signature);
 
     printf("\n[ERROR] No trusted certificate matched the signature.\n");
+    
     printf("========== Signature Verification Finished ==========\n\n");
 
-    return 0;
+    if (!codesigning_cert_found && eku_failure) {
+	    return VERIFY_NO_CODESIGN_EKU;
+    }
+
+return VERIFY_SIGNATURE_FAILED;
+
 }

@@ -5,6 +5,14 @@
 
 #include <stddef.h>
 
+typedef enum
+{
+    VERIFY_SUCCESS = 0,
+    VERIFY_SIGNATURE_FAILED,
+    VERIFY_INVALID_BASE64,
+    VERIFY_NO_CODESIGN_EKU,
+    VERIFY_CERT_LOAD_FAILED
+} VerifyStatus;
 
 #ifndef CRYPTO_H
 #define CRYPTO_H
@@ -19,6 +27,8 @@ unsigned char *decode_signature(const char *signature_b64, size_t *signature_len
 
 int verify_signature(EVP_PKEY *public_key, const unsigned char *signature, size_t signature_len, const unsigned char *data, size_t data_len);
 
-int verify_signed_script(const char *certificate_directory, const char *signature_b64, const char *script);
+VerifyStatus verify_signed_script(const char *certificate_directory, const char *signature_b64, const char *script, char *matched_certificate, size_t matched_certificate_size);
+
+int check_code_signing_extension(X509 *cert);
 
 #endif
